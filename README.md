@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -181,35 +180,37 @@
   </div>
 </div>
 
-<div id="loggedInBar">Logged in as: <span id="playerNameDisplay"></span></div>
-<h1>🛡️ IRON DOME</h1>
+<div id="gameWrapper" style="display:none; flex-direction:column; align-items:center;">
+  <div id="loggedInBar">Logged in as: <span id="playerNameDisplay"></span></div>
+  <h1>🛡️ IRON DOME</h1>
 
-<div id="hud">
-  <div><label>SCORE </label><span id="scoreDisplay">0</span></div>
-  <div><label>LIVES </label><span id="livesDisplay">3</span></div>
-  <div><label>📦 TO CITY </label><span id="caughtDisplay">0</span></div>
-</div>
+  <div id="hud">
+    <div><label>SCORE </label><span id="scoreDisplay">0</span></div>
+    <div><label>LIVES </label><span id="livesDisplay">3</span></div>
+    <div><label>📦 TO CITY </label><span id="caughtDisplay">0</span></div>
+  </div>
 
-<div style="position:relative;display:inline-block;">
-  <canvas id="gameCanvas" width="520" height="500"></canvas>
-  <div id="supplyCounter" style="
-    position:absolute; top:10px; right:12px;
-    font-family:'Orbitron',sans-serif; font-size:0.75rem;
-    letter-spacing:0.1em; color:#7effd4;
-    text-shadow:0 0 8px #7effd490;
-    pointer-events:none;
-  ">📦 <span id="supplyCounterVal">0</span></div>
-</div>
+  <div style="position:relative;display:inline-block;">
+    <canvas id="gameCanvas" width="520" height="500"></canvas>
+    <div id="supplyCounter" style="
+      position:absolute; top:10px; right:12px;
+      font-family:'Orbitron',sans-serif; font-size:0.75rem;
+      letter-spacing:0.1em; color:#7effd4;
+      text-shadow:0 0 8px #7effd490;
+      pointer-events:none;
+    ">📦 <span id="supplyCounterVal">0</span></div>
+  </div>
 
-<div id="instructions">← → MOVE &nbsp;|&nbsp; SPACE SHOOT &nbsp;|&nbsp; Let 📦 reach the city · Shoot 💣 bombs</div>
+  <div id="instructions">← → MOVE &nbsp;|&nbsp; SPACE SHOOT &nbsp;|&nbsp; Let 📦 reach the city · Shoot 💣 bombs</div>
 
-<div id="overlay">
-  <h2 id="overlayTitle">IRON DOME</h2>
-  <p id="overlayMsg">Stop falling bombs and make sure that<br>Supply crates reach the city.</p>
-  <div id="scoreboard"></div>
-  <div class="btn-row">
-    <button id="homeBtn" style="display:none" onclick="showHome()">HOME</button>
-    <button id="startBtn" onclick="startGame()">START MISSION</button>
+  <div id="overlay">
+    <h2 id="overlayTitle">IRON DOME</h2>
+    <p id="overlayMsg">Stop falling bombs and make sure that<br>Supply crates reach the city.</p>
+    <div id="scoreboard"></div>
+    <div class="btn-row">
+      <button id="homeBtn" style="display:none" onclick="showHome()">HOME</button>
+      <button id="startBtn" onclick="startGame()">START MISSION</button>
+    </div>
   </div>
 </div>
 
@@ -925,6 +926,7 @@ async function doLogin() {
     if (match) {
       currentPlayer = name;
       document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('gameWrapper').style.display = 'flex';
       document.getElementById('playerNameDisplay').textContent = name;
       renderScoreboard();
     } else {
