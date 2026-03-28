@@ -1052,35 +1052,41 @@ function populateBoards(scores) {
 }
 
 function renderHomeBoards() {
-  // Show cached global scores instantly while we fetch fresh data
-  populateBoards(getCachedScores());
-  // Fetch global top-10 AND all player scores in parallel
-  Promise.all([
-    fetchScores(),
-    fetch(`${SCRIPT_URL}?action=getallscores`).then(r => r.json()).catch(() => null)
-  ]).then(([globalScores, allData]) => {
-    const allScores = (allData && allData.scores) ? allData.scores : globalScores;
-    populateBoards(allScores);
-  });
+  // Show loading state immediately
+  document.getElementById('personalBoard').innerHTML = '<li class="no-scores">Loading...</li>';
+  document.getElementById('globalBoard').innerHTML = '<li class="no-scores">Loading...</li>';
+
+  // Fetch all scores from sheet (used for both boards)
+  fetch(`${SCRIPT_URL}?action=getallscores`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'ok' && data.scores) {
+        setCachedScores(data.scores);
+        populateBoards(data.scores);
+      } else {
+        populateBoards(getCachedScores());
+      }
+    })
+    .catch(() => populateBoards(getCachedScores()));
 }
 
-function exitGame() {
+async function exitGame() {
   gameRunning = false;
   if (animId) cancelAnimationFrame(animId);
-  saveScore(score);
   document.getElementById('gameClock').style.display = 'none';
   document.getElementById('exitBtn').style.display = 'none';
   BUILDINGS.forEach(b => { b.dy = 0; b.vy = 0; b.falling = false; });
   document.getElementById('gameWrapper').style.display = 'none';
+  await saveScore(score);
   showHome();
 }
 
-function endGame() {
+async function endGame() {
   gameRunning = false;
   sfxGameOver();
-  saveScore(score);
   document.getElementById('gameClock').style.display = 'none';
   document.getElementById('exitBtn').style.display = 'none';
+  await saveScore(score);
   document.getElementById('overlayTitle').textContent = 'MISSION FAILED';
   document.getElementById('overlayTitle').style.color = '#ff6b6b';
   document.getElementById('overlayMsg').innerHTML =
