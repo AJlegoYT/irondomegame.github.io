@@ -878,7 +878,13 @@ function getScores() {
   catch(e) { return []; }
 }
 function saveScore(s) {
-  const scores = getScores();
+  if (!currentPlayer) return; // no logged-in player, nothing to save
+  // Migrate old format (plain numbers) to {name, score} objects
+  let scores = getScores();
+  if (scores.length && typeof scores[0] !== 'object') {
+    localStorage.removeItem('irondome_scores');
+    scores = [];
+  }
   const existing = scores.findIndex(e => e.name === currentPlayer);
   if (existing >= 0) {
     // Only update if the new score beats their personal best
