@@ -956,42 +956,51 @@ function loseLife(px, py) {
   if (lives <= 0) endGame();
 }
 
-// ─── SCOREBOARD (localStorage) ────────────────────────────────
-// Scores are stored as [{name, score}, ...], one entry per player.
-// A new score only replaces the player's existing entry if it's higher.
-function getScores() {
+// ─── SCOREBOARD (sheet-backed) ────────────────────────────────
+// Scores live in the Google Sheet. localStorage is used as a
+// cache so the home page loads instantly while the fetch runs.
+
+function getCachedScores() {
   try { return JSON.parse(localStorage.getItem('irondome_scores') || '[]'); }
   catch(e) { return []; }
 }
-function saveScore(s) {
-  if (!currentPlayer) return; // no logged-in player, nothing to save
-  // Migrate old format (plain numbers) to {name, score} objects
-  let scores = getScores();
-  if (scores.length && typeof scores[0] !== 'object') {
-    localStorage.removeItem('irondome_scores');
-    scores = [];
-  }
-  const existing = scores.findIndex(e => e.name === currentPlayer);
-  if (existing >= 0) {
-    // Only update if the new score beats their personal best
-    if (s > scores[existing].score) scores[existing].score = s;
-  } else {
-    scores.push({ name: currentPlayer, score: s });
-  }
-  scores.sort((a, b) => b.score - a.score);
-  localStorage.setItem('irondome_scores', JSON.stringify(scores.slice(0, 10)));
+function setCachedScores(scores) {
+  localStorage.setItem('irondome_scores', JSON.stringify(scores));
 }
+
+// Push score to the sheet — every game gets its own entry
+async function saveScore(s) {
+  if (!currentPlayer) return;
+  try {
+    await fetch(`${SCRIPT_URL}?action=savescore&name=${encodeURIComponent(currentPlayer)}&score=${s}`);
+  } catch(e) { console.warn('Score save failed:', e); }
+}
+
+// Fetch live leaderboard from sheet, fall back to cache
+async function fetchScores() {
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=getscores`);
+    const data = await res.json();
+    if (data.status === 'ok' && data.scores) {
+      setCachedScores(data.scores);
+      return data.scores;
+    }
+  } catch(e) { console.warn('Score fetch failed, using cache:', e); }
+  return getCachedScores();
+}
+
+// Also fetch ALL scores (not just top 10) for the personal board
+async function fetchAllScores() {
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=getallscores`);
+    const data = await res.json();
+    if (data.status === 'ok' && data.scores) return data.scores;
+  } catch(e) {}
+  return null;
+}
+
 function renderScoreboard() {
-  const scores = getScores();
-  const el = document.getElementById('scoreboard');
-  if (!scores.length) {
-    el.innerHTML = '<h3>🏆 HIGH SCORES</h3><p class="no-scores">No scores yet!</p>';
-    return;
-  }
-  const rows = scores.map((e, i) =>
-    `<li><span><span class="rank">#${i+1}</span> ${e.name}</span><span>${e.score}</span></li>`
-  ).join('');
-  el.innerHTML = `<h3>🏆 HIGH SCORES</h3><ol>${rows}</ol>`;
+  // no-op: scoreboard is now rendered in renderHomeBoards
 }
 
 function showHome() {
@@ -1009,36 +1018,50 @@ function goFromHome() {
   startGame();
 }
 
-function renderHomeBoards() {
-  const scores = getScores();
-
-  // Personal board — all scores for the current player (just their best for now)
+function populateBoards(scores) {
+  // Personal board — all scores belonging to the current player, newest first
   const personalEl = document.getElementById('personalBoard');
-  const myEntry = scores.find(e => e.name === currentPlayer);
-  if (myEntry) {
-    // Show personal best prominently
-    const rank = scores.indexOf(myEntry) + 1;
-    personalEl.innerHTML = `
-      <li class="me">
-        <span><span class="rank">#${rank}</span> ${myEntry.name}</span>
-        <span>${myEntry.score}</span>
+  const myScores = scores
+    .filter(e => e.name.toLowerCase() === currentPlayer.toLowerCase())
+    .sort((a, b) => b.score - a.score);
+  if (myScores.length) {
+    personalEl.innerHTML = myScores.map((e, i) => {
+      const medal = i === 0 ? '🥇' : '';
+      return `<li class="${i === 0 ? 'me' : ''}">
+        <span><span class="rank">#${i+1}</span> ${medal} ${e.score}</span>
+        <span style="font-size:0.7rem;color:#7effd450">${e.time || ''}</span>
       </li>`;
-    // Pad with a message
-    personalEl.innerHTML += '<li style="border:none;justify-content:center;padding-top:10px;"><span style="color:#7effd440;font-size:0.75rem;">Play more to beat your best!</span></li>';
+    }).join('');
   } else {
     personalEl.innerHTML = '<li class="no-scores">No scores yet — play your first game!</li>';
   }
 
-  // Global top-10 board
+  // Global top-10 — all players, sorted by score
   const globalEl = document.getElementById('globalBoard');
   if (!scores.length) {
     globalEl.innerHTML = '<li class="no-scores">No scores yet!</li>';
     return;
   }
   globalEl.innerHTML = scores.map((e, i) => {
-    const isMe = e.name === currentPlayer ? ' class="me"' : '';
-    return `<li${isMe}><span><span class="rank">#${i+1}</span> ${e.name}</span><span>${e.score}</span></li>`;
+    const isMe = e.name.toLowerCase() === currentPlayer.toLowerCase();
+    return `<li${isMe ? ' class="me"' : ''}>
+      <span><span class="rank">#${i+1}</span> ${e.name}</span>
+      <span>${e.score}</span>
+    </li>`;
   }).join('');
+}
+
+function renderHomeBoards() {
+  // Show cached global scores instantly while we fetch fresh data
+  populateBoards(getCachedScores());
+  // Fetch global top-10 AND all player scores in parallel
+  Promise.all([
+    fetchScores(),
+    fetch(`${SCRIPT_URL}?action=getallscores`).then(r => r.json()).catch(() => null)
+  ]).then(([globalScores, allData]) => {
+    const allScores = (allData && allData.scores) ? allData.scores : globalScores;
+    populateBoards(allScores);
+  });
 }
 
 function exitGame() {
@@ -1078,7 +1101,7 @@ function updateHUD() {
 }
 
 // ─── LOGIN & SIGNUP ────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0CrjiMm0XBmWmJsbwuIE6nmIQtZWgj2NMZfEeie8D4WcFpEyC5Bcou2L88t-_CXpS/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz69Cm5cGs8AJQP9Zc7xW6zdwcYHp6O1cfPDA-SDn-xBXjteCBC4VuvTbqYrSZb5Zi/exec';
 
 let currentPlayer = null;
 let isSignUpMode = false;
