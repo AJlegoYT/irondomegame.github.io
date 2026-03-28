@@ -165,6 +165,73 @@
     letter-spacing: 0.08em; margin-bottom: -4px;
   }
   #loggedInBar span { color: #7effd4; }
+
+  /* ── FULL-SCREEN HOME PAGE ── */
+  #homePage {
+    display: none;
+    position: fixed; inset: 0; z-index: 500;
+    background: #060d18;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    padding: 30px 20px;
+  }
+  #homePage h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2rem; letter-spacing: 0.2em;
+    color: #7effd4; text-shadow: 0 0 20px #7effd470;
+    margin-bottom: 0;
+  }
+  #homePage .subtitle {
+    font-size: 0.78rem; color: #7effd460;
+    letter-spacing: 0.12em; margin-top: -20px;
+  }
+  #homeBoards {
+    display: flex; gap: 32px;
+    align-items: flex-start; justify-content: center;
+    flex-wrap: wrap; width: 100%; max-width: 780px;
+  }
+  .homeBoard {
+    flex: 1; min-width: 260px; max-width: 340px;
+    background: #0d1c2e;
+    border: 2px solid #7effd430;
+    border-radius: 8px; padding: 22px 24px;
+  }
+  .homeBoard h2 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.82rem; letter-spacing: 0.14em;
+    color: #7effd4; margin-bottom: 14px;
+    text-align: center;
+  }
+  .homeBoard ol { list-style: none; padding: 0; }
+  .homeBoard ol li {
+    display: flex; justify-content: space-between;
+    align-items: center;
+    font-size: 0.88rem; color: #ccc;
+    padding: 5px 4px;
+    border-bottom: 1px solid #7effd418;
+  }
+  .homeBoard ol li:first-child { color: #ffe66d; font-size: 0.95rem; }
+  .homeBoard ol li:nth-child(2) { color: #e0e0e0; }
+  .homeBoard ol li:nth-child(3) { color: #c8a97a; }
+  .homeBoard .rank { color: #7effd460; margin-right: 10px; min-width: 22px; font-size: 0.78rem; }
+  .homeBoard .no-scores { font-size: 0.8rem; color: #7effd450; text-align: center; padding: 12px 0; }
+  .homeBoard .me { color: #7effd4 !important; }
+  #homePlayBtn {
+    padding: 13px 48px;
+    background: transparent; border: 2px solid #7effd4;
+    color: #7effd4; font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem; letter-spacing: 0.12em;
+    cursor: pointer; border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+  }
+  #homePlayBtn:hover { background: #7effd4; color: #060d18; }
+  #homeWelcome {
+    font-size: 0.82rem; color: #7effd480;
+    letter-spacing: 0.08em; margin-bottom: -14px;
+  }
+  #homeWelcome span { color: #7effd4; }
 </style>
 </head>
 <body>
@@ -187,6 +254,22 @@
       ">Sign Up</button>
     </div>
   </div>
+
+<div id="homePage">
+  <div id="homeWelcome">Welcome back, <span id="homePlayerName"></span></div>
+  <h1>🛡️ IRON DOME</h1>
+  <p class="subtitle">DEFEND THE CITY</p>
+  <div id="homeBoards">
+    <div class="homeBoard">
+      <h2>🎖️ YOUR BEST SCORES</h2>
+      <ol id="personalBoard"></ol>
+    </div>
+    <div class="homeBoard">
+      <h2>🏆 TOP 10 ALL PLAYERS</h2>
+      <ol id="globalBoard"></ol>
+    </div>
+  </div>
+  <button id="homePlayBtn" onclick="goFromHome()">START MISSION</button>
 </div>
 
 <div id="gameWrapper" style="display:none; flex-direction:column; align-items:center;">
@@ -909,16 +992,50 @@ function renderScoreboard() {
 }
 
 function showHome() {
-  document.getElementById('overlayTitle').textContent = 'IRON DOME';
-  document.getElementById('overlayTitle').style.color = '#7effd4';
-  document.getElementById('overlayMsg').innerHTML =
-    'Stop falling bombs and make sure that<br>Supply crates reach the city.';
-  document.getElementById('startBtn').textContent = 'START MISSION';
-  document.getElementById('startBtn').classList.remove('danger');
-  document.getElementById('homeBtn').style.display = 'none';
-  document.getElementById('scoreboard').style.display = '';
-  renderScoreboard();
-  document.getElementById('overlay').style.display = 'flex';
+  // Hide game overlay and show the full-screen home page
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('gameWrapper').style.display = 'flex';
+  document.getElementById('homePage').style.display = 'flex';
+  document.getElementById('homePlayerName').textContent = currentPlayer || '';
+  renderHomeBoards();
+}
+
+function goFromHome() {
+  // Close home page and kick off a new game
+  document.getElementById('homePage').style.display = 'none';
+  startGame();
+}
+
+function renderHomeBoards() {
+  const scores = getScores();
+
+  // Personal board — all scores for the current player (just their best for now)
+  const personalEl = document.getElementById('personalBoard');
+  const myEntry = scores.find(e => e.name === currentPlayer);
+  if (myEntry) {
+    // Show personal best prominently
+    const rank = scores.indexOf(myEntry) + 1;
+    personalEl.innerHTML = `
+      <li class="me">
+        <span><span class="rank">#${rank}</span> ${myEntry.name}</span>
+        <span>${myEntry.score}</span>
+      </li>`;
+    // Pad with a message
+    personalEl.innerHTML += '<li style="border:none;justify-content:center;padding-top:10px;"><span style="color:#7effd440;font-size:0.75rem;">Play more to beat your best!</span></li>';
+  } else {
+    personalEl.innerHTML = '<li class="no-scores">No scores yet — play your first game!</li>';
+  }
+
+  // Global top-10 board
+  const globalEl = document.getElementById('globalBoard');
+  if (!scores.length) {
+    globalEl.innerHTML = '<li class="no-scores">No scores yet!</li>';
+    return;
+  }
+  globalEl.innerHTML = scores.map((e, i) => {
+    const isMe = e.name === currentPlayer ? ' class="me"' : '';
+    return `<li${isMe}><span><span class="rank">#${i+1}</span> ${e.name}</span><span>${e.score}</span></li>`;
+  }).join('');
 }
 
 function exitGame() {
@@ -1053,7 +1170,7 @@ function loginSuccess(name) {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('gameWrapper').style.display = 'flex';
   document.getElementById('playerNameDisplay').textContent = name;
-  renderScoreboard();
+  showHome();
 }
 
 // Allow pressing Enter to submit
