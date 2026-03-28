@@ -254,6 +254,7 @@
       ">Sign Up</button>
     </div>
   </div>
+</div>
 
 <div id="homePage">
   <div id="homeWelcome">Welcome back, <span id="homePlayerName"></span></div>
@@ -529,6 +530,8 @@ document.addEventListener('keyup', e => keys[e.code] = false);
 // ─── START / RESTART ───────────────────────────────────────────
 function startGame() {
   sfxStart();
+  document.getElementById('homePage').style.display = 'none';
+  document.getElementById('gameWrapper').style.display = 'flex';
   document.getElementById('overlay').style.display = 'none';
   document.getElementById('homeBtn').style.display = 'none';
   document.getElementById('scoreboard').style.display = '';
@@ -992,17 +995,17 @@ function renderScoreboard() {
 }
 
 function showHome() {
-  // Hide game overlay and show the full-screen home page
+  // Hide everything game-related, show the full-screen home page
   document.getElementById('overlay').style.display = 'none';
-  document.getElementById('gameWrapper').style.display = 'flex';
+  document.getElementById('gameWrapper').style.display = 'none';
   document.getElementById('homePage').style.display = 'flex';
   document.getElementById('homePlayerName').textContent = currentPlayer || '';
   renderHomeBoards();
 }
 
 function goFromHome() {
-  // Close home page and kick off a new game
   document.getElementById('homePage').style.display = 'none';
+  document.getElementById('gameWrapper').style.display = 'flex';
   startGame();
 }
 
@@ -1039,13 +1042,13 @@ function renderHomeBoards() {
 }
 
 function exitGame() {
-  // Quit mid-game — save score and go home
   gameRunning = false;
   if (animId) cancelAnimationFrame(animId);
   saveScore(score);
   document.getElementById('gameClock').style.display = 'none';
   document.getElementById('exitBtn').style.display = 'none';
   BUILDINGS.forEach(b => { b.dy = 0; b.vy = 0; b.falling = false; });
+  document.getElementById('gameWrapper').style.display = 'none';
   showHome();
 }
 
@@ -1168,7 +1171,6 @@ async function doSignUp() {
 function loginSuccess(name) {
   currentPlayer = name;
   document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('gameWrapper').style.display = 'flex';
   document.getElementById('playerNameDisplay').textContent = name;
   showHome();
 }
