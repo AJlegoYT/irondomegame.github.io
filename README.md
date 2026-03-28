@@ -175,8 +175,17 @@
   <div id="loginBox">
     <input id="loginName" type="text" placeholder="Name" autocomplete="off" />
     <input id="loginPass" type="password" placeholder="Password" autocomplete="off" />
+    <input id="loginPass2" type="password" placeholder="Confirm Password" autocomplete="off" style="display:none" />
     <div id="loginError"></div>
-    <button id="loginBtn" onclick="doLogin()">ENTER</button>
+    <button id="loginBtn" onclick="submitForm()">LOG IN</button>
+    <div style="text-align:center; margin-top:2px;">
+      <span style="font-size:0.75rem; color:#7effd460;">Don't have an account?</span>
+      <button onclick="toggleMode()" id="toggleBtn" style="
+        background:none; border:none; color:#7effd4;
+        font-family:'Share Tech Mono',monospace; font-size:0.75rem;
+        cursor:pointer; text-decoration:underline; padding:0 4px;
+      ">Sign Up</button>
+    </div>
   </div>
 </div>
 
@@ -199,6 +208,29 @@
       text-shadow:0 0 8px #7effd490;
       pointer-events:none;
     ">📦 <span id="supplyCounterVal">0</span></div>
+
+    <!-- Clock (top-left) -->
+    <div id="gameClock" style="
+      position:absolute; top:10px; left:12px;
+      font-family:'Orbitron',sans-serif; font-size:0.75rem;
+      letter-spacing:0.1em; color:#7effd4;
+      text-shadow:0 0 8px #7effd490;
+      pointer-events:none; display:none;
+    ">⏱ <span id="clockDisplay">0:00</span></div>
+
+    <!-- Exit button (bottom-left of canvas) -->
+    <button id="exitBtn" onclick="exitGame()" style="
+      display:none;
+      position:absolute; bottom:10px; left:10px;
+      font-family:'Orbitron',sans-serif; font-size:0.65rem;
+      letter-spacing:0.08em;
+      background:transparent; border:1.5px solid #ff6b6b60;
+      color:#ff6b6b90; padding:5px 10px; border-radius:4px;
+      cursor:pointer; transition:all 0.2s;
+    "
+    onmouseover="this.style.background='#ff6b6b';this.style.color='#060d18';this.style.borderColor='#ff6b6b'"
+    onmouseout="this.style.background='transparent';this.style.color='#ff6b6b90';this.style.borderColor='#ff6b6b60'"
+    >✕ EXIT</button>
   </div>
 
   <div id="instructions">← → MOVE &nbsp;|&nbsp; SPACE SHOOT &nbsp;|&nbsp; Let 📦 reach the city · Shoot 💣 bombs</div>
@@ -353,7 +385,7 @@ const W = canvas.width, H = canvas.height;
 // ─── GAME STATE ────────────────────────────────────────────────
 let score, lives, caught, gameRunning, animId;
 let player, items, bullets, particles;
-let spawnTimer, spawnInterval, speed, gameFrame;
+let spawnTimer, spawnInterval, speed, gameFrame, gameSeconds;
 let keys = {};
 
 // ─── CONSTANTS ─────────────────────────────────────────────────
@@ -419,7 +451,7 @@ function startGame() {
   document.getElementById('scoreboard').style.display = '';
 
   score = 0; lives = 3; caught = 0;
-  spawnTimer = 0; spawnInterval = 90; speed = 1.8; gameFrame = 0;
+  spawnTimer = 0; spawnInterval = 90; speed = 1.8; gameFrame = 0; gameSeconds = 0;
 
   // Player x is movable; y is always PLAYER_Y (fixed row in the sky).
   player = { x: W / 2 - PLAYER_W / 2, y: PLAYER_Y, speed: 4 };
@@ -430,6 +462,8 @@ function startGame() {
 
   updateHUD();
   gameRunning = true;
+  document.getElementById('gameClock').style.display = 'block';
+  document.getElementById('exitBtn').style.display = 'block';
   if (animId) cancelAnimationFrame(animId);
   loop();
 }
@@ -454,6 +488,13 @@ function update() {
 
   // 3. Spawn items on a timer; difficulty increases both per-spawn and over time
   gameFrame++;
+  // Update clock every second (60 frames)
+  if (gameFrame % 60 === 0) {
+    gameSeconds++;
+    const m = Math.floor(gameSeconds / 60);
+    const s = gameSeconds % 60;
+    document.getElementById('clockDisplay').textContent = m + ':' + String(s).padStart(2,'0');
+  }
   // Every 5 seconds (300 frames) bump the base fall speed from the passage of time alone
   if (gameFrame % 300 === 0) {
     speed = Math.min(6, speed + 0.2);
@@ -830,14 +871,22 @@ function loseLife(px, py) {
 }
 
 // ─── SCOREBOARD (localStorage) ────────────────────────────────
+// Scores are stored as [{name, score}, ...], one entry per player.
+// A new score only replaces the player's existing entry if it's higher.
 function getScores() {
   try { return JSON.parse(localStorage.getItem('irondome_scores') || '[]'); }
   catch(e) { return []; }
 }
 function saveScore(s) {
   const scores = getScores();
-  scores.push(s);
-  scores.sort((a, b) => b - a);
+  const existing = scores.findIndex(e => e.name === currentPlayer);
+  if (existing >= 0) {
+    // Only update if the new score beats their personal best
+    if (s > scores[existing].score) scores[existing].score = s;
+  } else {
+    scores.push({ name: currentPlayer, score: s });
+  }
+  scores.sort((a, b) => b.score - a.score);
   localStorage.setItem('irondome_scores', JSON.stringify(scores.slice(0, 10)));
 }
 function renderScoreboard() {
@@ -847,8 +896,8 @@ function renderScoreboard() {
     el.innerHTML = '<h3>🏆 HIGH SCORES</h3><p class="no-scores">No scores yet!</p>';
     return;
   }
-  const rows = scores.map((s, i) =>
-    `<li><span><span class="rank">#${i+1}</span></span><span>${s}</span></li>`
+  const rows = scores.map((e, i) =>
+    `<li><span><span class="rank">#${i+1}</span> ${e.name}</span><span>${e.score}</span></li>`
   ).join('');
   el.innerHTML = `<h3>🏆 HIGH SCORES</h3><ol>${rows}</ol>`;
 }
@@ -866,10 +915,23 @@ function showHome() {
   document.getElementById('overlay').style.display = 'flex';
 }
 
+function exitGame() {
+  // Quit mid-game — save score and go home
+  gameRunning = false;
+  if (animId) cancelAnimationFrame(animId);
+  saveScore(score);
+  document.getElementById('gameClock').style.display = 'none';
+  document.getElementById('exitBtn').style.display = 'none';
+  BUILDINGS.forEach(b => { b.dy = 0; b.vy = 0; b.falling = false; });
+  showHome();
+}
+
 function endGame() {
   gameRunning = false;
   sfxGameOver();
   saveScore(score);
+  document.getElementById('gameClock').style.display = 'none';
+  document.getElementById('exitBtn').style.display = 'none';
   document.getElementById('overlayTitle').textContent = 'MISSION FAILED';
   document.getElementById('overlayTitle').style.color = '#ff6b6b';
   document.getElementById('overlayMsg').innerHTML =
@@ -889,20 +951,41 @@ function updateHUD() {
   document.getElementById('supplyCounterVal').textContent = caught;
 }
 
-// ─── LOGIN ─────────────────────────────────────────────────────
-const SHEET_ID = '1Ax05m4QXNbayllMVIurH-guI-deEDlaHcH6SEsDZKRk';
-const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+// ─── LOGIN & SIGNUP ────────────────────────────────────────────
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0CrjiMm0XBmWmJsbwuIE6nmIQtZWgj2NMZfEeie8D4WcFpEyC5Bcou2L88t-_CXpS/exec';
 
 let currentPlayer = null;
+let isSignUpMode = false;
+
+function toggleMode() {
+  isSignUpMode = !isSignUpMode;
+  const pass2 = document.getElementById('loginPass2');
+  const btn   = document.getElementById('loginBtn');
+  const toggle = document.getElementById('toggleBtn');
+  const hint  = toggle.previousElementSibling;
+  document.getElementById('loginError').textContent = '';
+  if (isSignUpMode) {
+    pass2.style.display = 'block';
+    btn.textContent = 'SIGN UP';
+    toggle.textContent = 'Log In';
+    hint.textContent = 'Already have an account?';
+  } else {
+    pass2.style.display = 'none';
+    btn.textContent = 'LOG IN';
+    toggle.textContent = 'Sign Up';
+    hint.textContent = "Don't have an account?";
+  }
+}
+
+function submitForm() {
+  if (isSignUpMode) doSignUp(); else doLogin();
+}
 
 async function doLogin() {
-  const nameEl = document.getElementById('loginName');
-  const passEl = document.getElementById('loginPass');
-  const errEl  = document.getElementById('loginError');
-  const btn    = document.getElementById('loginBtn');
-  const name   = nameEl.value.trim();
-  const pass   = passEl.value.trim();
-
+  const name = document.getElementById('loginName').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
   if (!name || !pass) { errEl.textContent = 'Please enter name and password.'; return; }
 
   btn.disabled = true;
@@ -910,43 +993,68 @@ async function doLogin() {
   errEl.textContent = '';
 
   try {
-    const res = await fetch(SHEET_URL);
-    const text = await res.text();
-    // Google wraps the JSON in /*O_o*/google.visualization.Query.setResponse({...});
-    const json = JSON.parse(text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)[1]);
-    const rows = json.table.rows;
-
-    // Column A = Name, Column B = Password
-    const match = rows.find(row => {
-      const rowName = (row.c[0]?.v || '').toString().trim().toLowerCase();
-      const rowPass = (row.c[1]?.v || '').toString().trim();
-      return rowName === name.toLowerCase() && rowPass === pass;
-    });
-
-    if (match) {
-      currentPlayer = name;
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('gameWrapper').style.display = 'flex';
-      document.getElementById('playerNameDisplay').textContent = name;
-      renderScoreboard();
+    const res = await fetch(`${SCRIPT_URL}?action=login&name=${encodeURIComponent(name)}&pass=${encodeURIComponent(pass)}`);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      loginSuccess(name);
     } else {
       errEl.textContent = 'Incorrect name or password.';
-      passEl.value = '';
+      document.getElementById('loginPass').value = '';
     }
   } catch(e) {
-    errEl.textContent = 'Could not reach login server. Is the sheet public?';
+    errEl.textContent = 'Could not reach server. Try again.';
     console.error(e);
   }
-
   btn.disabled = false;
-  btn.textContent = 'ENTER';
+  btn.textContent = 'LOG IN';
+}
+
+async function doSignUp() {
+  const name  = document.getElementById('loginName').value.trim();
+  const pass  = document.getElementById('loginPass').value.trim();
+  const pass2 = document.getElementById('loginPass2').value.trim();
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+
+  if (!name || !pass || !pass2) { errEl.textContent = 'Please fill in all fields.'; return; }
+  if (pass !== pass2) { errEl.textContent = 'Passwords do not match.'; return; }
+  if (pass.length < 3) { errEl.textContent = 'Password must be at least 3 characters.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'CREATING...';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=signup&name=${encodeURIComponent(name)}&pass=${encodeURIComponent(pass)}`);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      loginSuccess(name);
+    } else if (data.status === 'exists') {
+      errEl.textContent = 'That name is already taken. Try another.';
+    } else {
+      errEl.textContent = 'Sign up failed. Try again.';
+    }
+  } catch(e) {
+    errEl.textContent = 'Could not reach server. Try again.';
+    console.error(e);
+  }
+  btn.disabled = false;
+  btn.textContent = 'SIGN UP';
+}
+
+function loginSuccess(name) {
+  currentPlayer = name;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('gameWrapper').style.display = 'flex';
+  document.getElementById('playerNameDisplay').textContent = name;
+  renderScoreboard();
 }
 
 // Allow pressing Enter to submit
 document.addEventListener('DOMContentLoaded', () => {
-  ['loginName','loginPass'].forEach(id => {
+  ['loginName','loginPass','loginPass2'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
+      if (e.key === 'Enter') submitForm();
     });
   });
 });
