@@ -971,15 +971,18 @@ function setCachedScores(scores) {
 // Push score to the sheet — every game gets its own entry
 async function saveScore(s) {
   if (!currentPlayer) return;
+  const url = `${SCRIPT_URL}?action=savescore&name=${encodeURIComponent(currentPlayer)}&score=${encodeURIComponent(s)}`;
   try {
-    await fetch(`${SCRIPT_URL}?action=savescore&name=${encodeURIComponent(currentPlayer)}&score=${s}`);
+    // Use no-cors so the browser doesn't block the request.
+    // We can't read the response in no-cors mode, but the sheet still gets written.
+    await fetch(url, { method: 'GET', mode: 'no-cors' });
   } catch(e) { console.warn('Score save failed:', e); }
 }
 
 // Fetch live leaderboard from sheet, fall back to cache
 async function fetchScores() {
   try {
-    const res = await fetch(`${SCRIPT_URL}?action=getscores`);
+    const res = await fetch(`${SCRIPT_URL}?action=getscores`, { redirect: 'follow' });
     const data = await res.json();
     if (data.status === 'ok' && data.scores) {
       setCachedScores(data.scores);
@@ -1018,18 +1021,29 @@ function goFromHome() {
   startGame();
 }
 
+function formatDate(raw) {
+  if (!raw) return '';
+  // Try to parse whatever date string comes from the sheet
+  const d = new Date(raw);
+  if (isNaN(d)) return raw; // fall back to raw string if unparseable
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const y = d.getFullYear();
+  return `${m}/${day}/${y}`;
+}
+
 function populateBoards(scores) {
-  // Personal board — all scores belonging to the current player, newest first
+  // Personal board — all scores belonging to the current player, best first
   const personalEl = document.getElementById('personalBoard');
   const myScores = scores
     .filter(e => e.name.toLowerCase() === currentPlayer.toLowerCase())
     .sort((a, b) => b.score - a.score);
   if (myScores.length) {
     personalEl.innerHTML = myScores.map((e, i) => {
-      const medal = i === 0 ? '🥇' : '';
+      const medal = i === 0 ? '🥇 ' : '';
+      const date = formatDate(e.time);
       return `<li class="${i === 0 ? 'me' : ''}">
-        <span><span class="rank">#${i+1}</span> ${medal} ${e.score}</span>
-        <span style="font-size:0.7rem;color:#7effd450">${e.time || ''}</span>
+        <span><span class="rank">#${i+1}</span> ${medal}${e.score} &nbsp;<span style="font-size:0.7rem;color:#7effd470">${date}</span></span>
       </li>`;
     }).join('');
   } else {
@@ -1044,8 +1058,9 @@ function populateBoards(scores) {
   }
   globalEl.innerHTML = scores.map((e, i) => {
     const isMe = e.name.toLowerCase() === currentPlayer.toLowerCase();
+    const date = formatDate(e.time);
     return `<li${isMe ? ' class="me"' : ''}>
-      <span><span class="rank">#${i+1}</span> ${e.name}</span>
+      <span><span class="rank">#${i+1}</span> ${e.name} &nbsp;<span style="font-size:0.7rem;color:#7effd470">${date}</span></span>
       <span>${e.score}</span>
     </li>`;
   }).join('');
@@ -1057,7 +1072,7 @@ function renderHomeBoards() {
   document.getElementById('globalBoard').innerHTML = '<li class="no-scores">Loading...</li>';
 
   // Fetch all scores from sheet (used for both boards)
-  fetch(`${SCRIPT_URL}?action=getallscores`)
+  fetch(`${SCRIPT_URL}?action=getallscores`, { redirect: 'follow' })
     .then(r => r.json())
     .then(data => {
       if (data.status === 'ok' && data.scores) {
@@ -1107,7 +1122,7 @@ function updateHUD() {
 }
 
 // ─── LOGIN & SIGNUP ────────────────────────────────────────────
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyz69Cm5cGs8AJQP9Zc7xW6zdwcYHp6O1cfPDA-SDn-xBXjteCBC4VuvTbqYrSZb5Zi/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwclIz9QlteGmtrWrFe70g3zpjdsS2EStIHok_fklCYsz599duH6YFbTn2mVShRLH_o/exec';
 
 let currentPlayer = null;
 let isSignUpMode = false;
