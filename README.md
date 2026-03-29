@@ -973,9 +973,9 @@ async function saveScore(s) {
   if (!currentPlayer) return;
   const url = `${SCRIPT_URL}?action=savescore&name=${encodeURIComponent(currentPlayer)}&score=${encodeURIComponent(s)}`;
   try {
-    // Use no-cors so the browser doesn't block the request.
-    // We can't read the response in no-cors mode, but the sheet still gets written.
-    await fetch(url, { method: 'GET', mode: 'no-cors' });
+    const res = await fetch(url, { redirect: 'follow' });
+    const data = await res.json();
+    if (data.status !== 'ok') console.warn('Save returned:', data);
   } catch(e) { console.warn('Score save failed:', e); }
 }
 
