@@ -1037,7 +1037,8 @@ function populateBoards(scores) {
   const personalEl = document.getElementById('personalBoard');
   const myScores = scores
     .filter(e => e.name.toLowerCase() === currentPlayer.toLowerCase())
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
   if (myScores.length) {
     personalEl.innerHTML = myScores.map((e, i) => {
       const medal = i === 0 ? '🥇 ' : '';
@@ -1056,7 +1057,7 @@ function populateBoards(scores) {
     globalEl.innerHTML = '<li class="no-scores">No scores yet!</li>';
     return;
   }
-  globalEl.innerHTML = scores.map((e, i) => {
+  globalEl.innerHTML = scores.slice(0, 10).map((e, i) => {
     const isMe = e.name.toLowerCase() === currentPlayer.toLowerCase();
     const date = formatDate(e.time);
     return `<li${isMe ? ' class="me"' : ''}>
